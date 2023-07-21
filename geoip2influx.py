@@ -16,6 +16,49 @@ from requests.exceptions import ConnectionError
 from influxdb.exceptions import InfluxDBServerError, InfluxDBClientError
 from IPy import IP as ipadd
 
+# Please crete the following table beforehand
+# CREATE TABLE geoip2influx_log (
+# host SYMBOL,
+# method SYMBOL,
+# status_code SYMBOL,
+# http_version SYMBOL,
+# city SYMBOL,
+# country_code SYMBOL,
+# country_name SYMBOL,
+# measurement SYMBOL,
+# count BYTE,
+# bytes_sent LONG,
+# request_time DOUBLE,
+# connect_time DOUBLE,
+# ip STRING,
+# remote_user STRING,
+# referrer STRING,
+# url STRING,
+# user_agent STRING,
+# timestamp TIMESTAMP
+# ) 
+# TIMESTAMP(timestamp)
+# PARTITION BY DAY;
+
+# CREATE TABLE geoip2influx_geo (
+# host SYMBOL,
+# country_code SYMBOL,
+# country_name SYMBOL,
+# state SYMBOL,
+# state_code SYMBOL,
+# city SYMBOL,
+# postal_code SYMBOL,
+# measurement SYMBOL,
+# latitude DOUBLE,
+# longitude DOUBLE,
+# ip STRING,
+# geohash GEOHASH(12c),
+# count BYTE,
+# timestamp TIMESTAMP
+# ) 
+# TIMESTAMP(timestamp)
+# PARTITION BY DAY;
+
 
 # Getting params from envs
 geoip_db_path = '/config/geoip2db/GeoLite2-City.mmdb'
@@ -101,7 +144,7 @@ def file_exists(log_path,geoip_db_path):
 
 
 def logparse(
-        log_path, influxdb_host, influxdb_port, influxdb_database,  
+        log_path, influxdb_host, influxdb_port, influxdb_database,
         geo_measurement, log_measurement, send_nginx_logs, geoip_db_path, inode):
     # Preparing variables and params
     ips = {}
@@ -205,13 +248,13 @@ def logparse(
                             except ValueError:
                                 log_data_fields['connect_time'] = str(datadict['connect_time'])
                             log_data_fields['ip'] = datadict['ipaddress']
-                            log_data_fields['datetime'] = datetime.strptime(datadict['dateandtime'], '%d/%b/%Y:%H:%M:%S %z')
+                            # log_data_fields['datetime'] = datetime.strptime(datadict['dateandtime'], '%d/%b/%Y:%H:%M:%S %z')    # dont need it -> questdb is giving out free timestamps
                             log_data_fields['remote_user'] = datadict['remote_user']
                             log_data_fields['referrer'] = datadict['referrer']
-                            log_data_fields['bytes_sent'] = datadict['bytes_sent']
+                            log_data_fields['bytes_sent'] = int(datadict['bytes_sent'])
                             log_data_fields['url'] = datadict['url']
-                            log_data_fields['request_time'] = datadict['request_time']
-                            log_data_fields['connect_time'] = datadict['connect_time']
+                            log_data_fields['request_time'] = float(datadict['request_time'])
+                            log_data_fields['connect_time'] = float(datadict['connect_time'])
                             log_data_fields['user_agent'] = datadict['user_agent']
                             log_data_tags['host'] = datadict['host']
                             log_data_tags['method'] = datadict['method']
@@ -242,7 +285,7 @@ def main():
     f'\n -e GEO_MEASUREMENT        :: {geo_measurement}' +
     f'\n -e LOG_MEASUREMENT        :: {log_measurement}' +
     f'\n -e SEND_NGINX_LOGS        :: {send_nginx_logs}' +
-    f'\n -e GEOIP2INFLUX_LOG_LEVEL :: {log_level}' 
+    f'\n -e GEOIP2INFLUX_LOG_LEVEL :: {log_level}'
     )
     # Parsing log file and sending metrics to Influxdb
     while file_exists(log_path,geoip_db_path):
@@ -250,7 +293,7 @@ def main():
         inode = stat(log_path).st_ino
         # Run main loop and grep a log file
         logparse(
-            log_path, influxdb_host, influxdb_port, influxdb_database, 
+            log_path, influxdb_host, influxdb_port, influxdb_database,
             geo_measurement, log_measurement, send_nginx_logs, geoip_db_path, inode) # NOQA
 
 if __name__ == '__main__':
